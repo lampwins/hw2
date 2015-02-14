@@ -30,47 +30,53 @@ const char* valid_builtin_commands[] = {"cd", "exit", NULL};
 int find_fullpath( char* fullpath, command_t* p_cmd ){
 	
 	struct stat buffer;
-	int partCount, i, start_pos, exists, startConcatPos, j;
-	
+	int partCount, i, start_pos, exists, collen, path_length, pos_of_next_collen, length_of_part;
+
 	char* path_env_variable;
 	path_env_variable = getenv( "PATH" );
-	printf("PATH = %s\n", path_env_variable );
+	partCount += number_of_needle_in_hey_stack(path_env_variable, ':') + 1;
 	
-	partCount = number_of_needle_in_hey_stack(path_env_variable, ':') + 1;
 	
 	start_pos = 0;
 	for(i = 0; i < partCount; i++){
-		char part[pos_of_next_char(path_env_variable, start_pos, ':') - start_pos];
+			
+		//get the pos of the next collen
+		pos_of_next_collen = pos_of_next_char(path_env_variable, start_pos, ':');
 		
-		copy_string_part(path_env_variable, part, start_pos, pos_of_next_char(path_env_variable, start_pos, ':') - 1);
+		//calculate the length of the current part
+		length_of_part = pos_of_next_collen - start_pos;
 		
-		char fullPath[string_length(part) + string_length(p_cmd->name)];
+		//compute the total length of this path
+		path_length = string_length(p_cmd->name) + length_of_part + 1;
 		
-		copy_string_part(part, fullPath, 0, string_length(part));
+		//define a new char with this total length
+		char full_path_test[path_length + 1];
 		
-		startConcatPos = string_length(part);
+		//copy in the path
+		copy_string_part(path_env_variable, full_path_test, start_pos, pos_of_next_collen);
 		
-		for(j = 0; j < string_length(p_cmd->name); j++){
-			fullPath[startConcatPos + j] = p_cmd->name[j];
-		}
+		//concat the path and trailing / before command
+		string_concat(full_path_test, "/", full_path_test);
 		
-		
-		exists = stat(fullPath, &buffer); 
-		
+		//concat the path and the command
+		string_concat(full_path_test, p_cmd->name, full_path_test);
+				
+		//check if the cmd is in the current path;
+		exists = stat(full_path_test, &buffer); 
 		
 		if ( exists == 0 && ( S_IFDIR & buffer.st_mode ) )  {
-        	// Directory exists
+        	//Directory exists
         	return 0;
 		} else if ( exists == 0 && ( S_IFREG & buffer.st_mode ) ) {
-          // File exists
-          
-        	free(p_cmd->name);
-        	p_cmd->name = malloc(string_length(fullPath));
-        	copy_string_part(fullPath, p_cmd->name, 0, string_length(fullPath));
-          
+          	// File exists
+          	
+          	//copy current full path to fullpath pointer
+          	copy_string_part(full_path_test, fullpath, 0, string_length(full_path_test));
+          	
         	return 1;
 		} else {
-			return 0;
+			//calculate new starting pos
+			start_pos = pos_of_next_collen + 1;
 		}
 	}
 	
@@ -78,30 +84,84 @@ int find_fullpath( char* fullpath, command_t* p_cmd ){
 	return 0;
 }
 
+void string_concat(char* a, char* b, char* target){
+	int i = 0;
+	while (a[i] != '\0') {
+    	target[i] = a[i];
+    	i++; 	
+	}
+ 
+    int j = 0;
+   	while (b[j] != '\0') {
+    	target[i++] = b[j++];
+   	}
+ 
+   	target[i] = '\0';
+}
+
 int number_of_needle_in_hey_stack(char* str, char needle){
 	int i = 0, counter = 0;
 	while(str[i] !=  '\0'){
 		if(str[i] == needle){
 			counter++;
+		
 		}
 		i++;
 	}
-			
 	return counter;
 }
 
-int is_builtin( command_t* p_cmd ){
-	int i, j;
+int strings_equal(const char* a, const char* b){
 	
-	for(i = 0; i < p_cmd->argc; i++){
-		for(j = 0; j < string_length(p_cmd->argv[i]); j++){
-			if(p_cmd->argv[i][j] != p_cmd->name[j]){
-					return 0;
+	while(*a == *b){
+      if (*a == '\0' || *b == '\0')
+         break;
+    
+      a++;
+      b++;
+    }
+         	
+   if(*a == '\0' && *b == '\0'){
+      return 1;
+   }else{
+      return 0;
+    }
+}
+
+int do_builtin( command_t* p_cmd ){
+	
+	int i = 0;
+	
+	while(valid_builtin_commands[i] != NULL){
+		
+		//find the cmd in the array of known cmds
+		if(strings_equal("cd", valid_builtin_commands[i])){
+			//cd - check that is only one argv
+			if(p_cmd->argc == 2){
+				return chdir(p_cmd->argv[1]);
+			}else{
+				return 0;
 			}
 		}
+		i++;
 	}
 	
-	return 1;
+	
+	return 0;
+}
+
+int is_builtin( command_t* p_cmd ){
+
+	int i = 0;
+		
+	while(valid_builtin_commands[i] != NULL){
+		if(strings_equal(p_cmd->name, valid_builtin_commands[i])){
+			return 1;
+		}
+		i++;
+	}
+	
+	return 0;
 }
 
 void parse( char* line, command_t* p_cmd ){
@@ -110,16 +170,17 @@ void parse( char* line, command_t* p_cmd ){
 	int i, partCount, start_pos, pos_of_next_space, length_of_part;
 	
 	//remove the line break at the end of the line
-	line[string_length(line) - 2] = '\0';
+	//line[string_length(line) - 1] = '\0';
 
 	//get the number of of spaces and add one, this is the number of parts
-	partCount += number_of_needle_in_hey_stack(line, ' ') + 1;
-	
+	partCount = number_of_needle_in_hey_stack(line, ' ') + 1;
+		
 	//allocate space for all the parts (+1 for null)
 	p_cmd->argv = (char **) malloc(sizeof(char *) * (partCount + 1));
 
 	//set argc to the number of parts
 	p_cmd->argc = partCount;
+
 	
 	//loop through all parts
 	start_pos = 0;
@@ -184,26 +245,43 @@ int string_length(char* str){
 	while(str[i] != '\0')
 		i++;
 		
-	return ++i;
+	return i;
 }
 
 
 int execute( command_t* p_cmd ){
 
-	int fnd = FALSE;
-	char* fullpath;
+	int fnd = FALSE, i;
+	char fullpath[255];
 	int status;
 
 	fnd = find_fullpath( fullpath, p_cmd );
-		
+			
 	if ( fnd ) {
 		if ( fork() == 0 ) {
+			printf("%s", fullpath);
 			execv( fullpath, p_cmd->argv );
 		}
 		wait( &status );
 	} else {
-		// display to user cmd not found
+		printf("Command not found.\n");
+		return 0;
 	}
 	
 	return 1;
+}
+
+void cleanup( command_t* p_cmd ){
+	
+	//free the name
+	free(p_cmd->name);
+	
+	//free the argv array elements
+	int i;
+	for(i = 0; i < p_cmd->argc; i++){
+		free(p_cmd->argv[i]);
+	}
+	
+	//free the argv array itself
+	free(p_cmd->argv);
 }

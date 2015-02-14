@@ -181,3 +181,7 @@ int string_length(char* str);
 int pos_of_next_char(char* str, int start_pos, char needle);
 
 int number_of_needle_in_hey_stack(char* str, char needle);
+
+void string_concat(char* a, char* b, char* target);
+
+int strings_equal(const char* a, const char* b);

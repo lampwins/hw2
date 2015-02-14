@@ -51,14 +51,23 @@ int main( int argc, char** argv ) {
 		fgets(line, sizeof(line), stdin);
 						
 		if(*line == '\n')
-			continue;			
+			continue;	
+			
+		line[string_length(line)-1] = '\0';
+			
+		if(strings_equal(line, "exit")){
+			exit(1);
+		}		
 						
 		//parse the input
 		parse(line, &p_cmd);
 		
-		char* fullpath;
-		printf("You entered %s. Searching: %i\n", p_cmd.name, find_fullpath(fullpath, &p_cmd));
-			
+		if(is_builtin(&p_cmd))
+			do_builtin(&p_cmd);
+		else
+			execute(&p_cmd);
+		
+		cleanup(&p_cmd);
 		
 	}
 	
